@@ -1,9 +1,10 @@
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import React from 'react'; // ← ЭТО ОБЯЗАТЕЛЬНО
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Home from './pages/Home';
 import Rules from './pages/Rules';
 import Game from './pages/Game';
 
-function App() {
+export default function App() {
   return (
     <Router>
       <Routes>
@@ -14,5 +15,3 @@ function App() {
     </Router>
   );
 }
-
-export default App;

@@ -12,22 +12,87 @@ const io = new Server(server, {
 let rooms = {};
 
 io.on('connection', (socket) => {
-  console.log('a user connected:', socket.id);
+  console.log('🔌 Игрок подключился:', socket.id);
 
   socket.on('joinRoom', (roomId) => {
+    console.log(`📥 Игрок ${socket.id} вошёл в комнату ${roomId}`);
     socket.join(roomId);
-    if (!rooms[roomId]) rooms[roomId] = [];
-    rooms[roomId].push(socket.id);
-    io.to(roomId).emit('playerJoined', rooms[roomId]);
+
+    // создаём комнату, если её нет
+    if (!rooms[roomId]) {
+      rooms[roomId] = {
+        players: [],
+        currentTurn: null
+      };
+    }
+
+    // добавляем игрока, если ещё не в комнате
+    if (!rooms[roomId].players.includes(socket.id)) {
+      rooms[roomId].players.push(socket.id);
+    }
+
+    // если это первый игрок — он начинает
+    if (rooms[roomId].players.length === 1) {
+      rooms[roomId].currentTurn = socket.id;
+    }
+
+    console.log('👥 Текущие игроки:', rooms[roomId].players);
+
+    // отправляем обновление комнаты
+    io.to(roomId).emit('roomUpdate', {
+      players: rooms[roomId].players,
+      currentTurn: rooms[roomId].currentTurn
+    });
+  });
+
+  socket.on('rollDice', (roomId) => {
+    const room = rooms[roomId];
+    if (!room) return;
+
+    // проверяем: сейчас ли очередь этого игрока
+    //if (room.currentTurn !== socket.id) return;
+
+    const result = Math.floor(Math.random() * 6) + 1;
+    console.log(`🎲 ${socket.id} бросил кубик: ${result}`);
+
+    io.to(roomId).emit('diceRolled', { player: socket.id, result });
+
+    // передаём ход следующему игроку
+    const idx = room.players.indexOf(socket.id);
+    const nextIdx = (idx + 1) % room.players.length;
+    room.currentTurn = room.players[nextIdx];
+
+    // уведомляем всех
+    io.to(roomId).emit('roomUpdate', {
+      players: room.players,
+      currentTurn: room.currentTurn
+    });
   });
 
   socket.on('disconnect', () => {
-    for (const room in rooms) {
-      rooms[room] = rooms[room].filter(id => id !== socket.id);
-      io.to(room).emit('playerJoined', rooms[room]);
+    for (const roomId in rooms) {
+      const room = rooms[roomId];
+      room.players = room.players.filter(id => id !== socket.id);
+
+      // если игрок ушёл, передаём ход другому
+      if (room.currentTurn === socket.id) {
+        room.currentTurn = room.players[0] || null;
+      }
+
+      // если игроков не осталось — удаляем комнату
+      if (room.players.length === 0) {
+        delete rooms[roomId];
+        console.log(`🗑 Комната ${roomId} удалена`);
+      } else {
+        io.to(roomId).emit('roomUpdate', {
+          players: room.players,
+          currentTurn: room.currentTurn
+        });
+      }
     }
-    console.log('user disconnected:', socket.id);
+
+    console.log('❌ Игрок отключился:', socket.id);
   });
 });
 
-server.listen(3000, () => console.log('Server running on http://localhost:3000'));
+server.listen(3000, () => console.log('✅ Сервер запущен на http://localhost:3000'));
